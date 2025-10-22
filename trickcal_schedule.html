@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>트릭컬 리바이브 - 알림장</title>
+  <style>
+    :root{
+      --bg:#f3f3f3; --panel:#ffffff; --ink:#252525; --muted:#8d8d8d; --line:#e6e6e6;
+      --accent:#2f7cff; --chip:#efefef; --shadow:0 6px 24px rgba(0,0,0,.08);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%; scroll-behavior:smooth;}
+    body{margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans KR", Apple SD Gothic Neo, "Malgun Gothic", sans-serif; background:var(--bg); color:var(--ink);}
+
+    /* Layout */
+    .app{display:grid; grid-template-columns: 280px 1fr; gap:20px; padding:24px 24px 96px; max-width:1200px; margin:0 auto; width:100%;}
+    .panel{background:var(--panel); border-radius:14px; box-shadow:var(--shadow);}
+
+    /* Sidebar */
+    .sidebar{padding:16px; position:sticky; top:20px; align-self:start;}
+    .sb-card{background:#fff; border-radius:12px; padding:16px 14px; margin-bottom:14px; border:1px solid var(--line); cursor:pointer;}
+    .sb-title{font-weight:800; font-size:18px}
+    .sb-sub{font-size:12px; color:var(--muted); margin-top:6px}
+
+    /* Main */
+    .main{padding:0;}
+    .toolbar{display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--line);}
+    .toolbar h2{margin:0; font-size:20px}
+    .gear{border:none; background:var(--chip); padding:8px 12px; border-radius:999px; cursor:pointer}
+
+    .section{padding:14px 20px 4px; font-weight:800; color:#555}
+    .list{display:grid; grid-template-columns: 1fr 1fr; gap:0 24px; padding:0 20px 16px;}
+    .row{display:flex; align-items:flex-start; gap:10px; padding:12px 0; border-bottom:1px dashed var(--line)}
+    .row:last-child{border-bottom:none}
+    .col{display:flex; flex-direction:column; gap:4px; min-width:0}
+    .col > label{line-height:1.5}
+    .go{margin-left:auto; background:var(--chip); border:none; padding:8px 14px; border-radius:10px; cursor:pointer}
+    input[type="checkbox"]{width:18px; height:18px}
+    .row.done label{opacity:.5; text-decoration:line-through}
+
+    .tiny{font-size:12px; color:#777}
+    .subline{margin-left:28px}
+
+    .empty{padding:24px; text-align:center; color:#777}
+
+    /* Settings drawer + backdrop */
+    .backdrop{position:fixed; inset:0; background:rgba(0,0,0,.25); opacity:0; pointer-events:none; transition:.2s ease; z-index:90}
+    .backdrop.show{opacity:1; pointer-events:auto}
+
+    .drawer{position:fixed; right:24px; bottom:88px; width:360px; max-width:94vw; transform:translateY(20px); opacity:0; pointer-events:none; transition:.2s ease; z-index:100}
+    .drawer.open{transform:translateY(0); opacity:1; pointer-events:auto}
+    .drawer .panel{padding:16px; max-height:70vh; overflow:auto}
+    .opt{display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px dashed var(--line)}
+    .opt:last-child{border-bottom:none}
+
+    /* Tabs */
+    .tabs{position:fixed; left:0; right:0; bottom:0; background:#fff; border-top:1px solid var(--line); display:flex}
+    .tab-btn{flex:1; padding:14px 10px; text-align:center; cursor:pointer}
+    .tab-btn.active{font-weight:800; border-top:3px solid var(--accent)}
+    .tabview{display:none}
+    .tabview.active{display:block}
+
+    /* Gameplay layout: when 활성화, 본 알림장(app) 숨김 */
+    body.play .app{display:none}
+
+    /* Gameplay */
+    .gameplay{padding:16px 24px 96px; max-width:920px; margin:0 auto}
+    .gp-cat{margin:14px 0 6px; font-weight:800}
+    .gp-grid{background:#fff; border-radius:12px; padding:8px 14px; border:1px solid var(--line)}
+
+    @media (max-width: 960px){
+      .app{grid-template-columns:1fr}
+      .list{grid-template-columns:1fr}
+    }
+  </style>
+</head>
+<body>
+  <!-- 알림장 화면 -->
+  <div class="app" id="app">
+    <aside class="sidebar">
+      <div class="sb-card" data-target="today-section">
+        <div class="sb-title">오늘의 알림장</div>
+        <div class="sb-sub"><span id="todayLeft">00시간 00분 남았다!</span></div>
+      </div>
+      <div class="sb-card" data-target="week-section">
+        <div class="sb-title">이번주 알림장</div>
+        <div class="sb-sub"><span id="weekLeft">00일 00시간 남았다!</span></div>
+      </div>
+      <div class="sb-card" data-target="season-section">
+        <div class="sb-title">시즌별 알림장</div>
+        <div class="sb-sub">이벤트 진행 상황을 한 곳에서!</div>
+      </div>
+    </aside>
+
+    <main class="main panel">
+      <div class="toolbar">
+        <h2>알림장</h2>
+        <button id="gearBtn" class="gear" title="설정">⚙</button>
+      </div>
+
+      <div id="today-section" class="section">오늘의 알림장</div>
+      <div id="todayList" class="list"></div>
+
+      <div id="week-section" class="section">이번주 알림장</div>
+      <div id="weekList" class="list"></div>
+
+      <div id="season-section" class="section">시즌별 알림장</div>
+      <div id="seasonList" class="list"></div>
+
+      <div class="empty" id="emptyMsg" style="display:none">설정에서 표시할 항목을 선택하세요.</div>
+    </main>
+  </div>
+
+  <!-- 설정 배경 & 패널 -->
+  <div id="backdrop" class="backdrop"></div>
+  <div class="drawer" id="drawer">
+    <div class="panel">
+      <h3>표시할 스케줄 선택</h3>
+      <div class="tiny">체크한 항목만 알림장에 표시됩니다. (자동 저장)</div>
+      <h4>오늘의 알림장</h4>
+      <div id="set-today"></div>
+      <h4>이번주 알림장</h4>
+      <div id="set-week"></div>
+      <h4>시즌별 알림장</h4>
+      <div id="set-season"></div>
+    </div>
+  </div>
+
+  <!-- 하단 탭 -->
+  <div class="tabs">
+    <div class="tab-btn active" data-tab="tab-book">알림장</div>
+    <div class="tab-btn" data-tab="tab-play">게임 플레이</div>
+  </div>
+
+  <!-- 게임플레이(체크만) -->
+  <section id="tab-play" class="tabview">
+    <div class="gameplay">
+      <div class="tiny">게임 플레이 체크 화면. 여기서 체크하면 알림장에도 완료로 반영된다.</div>
+      <div class="gp-cat">오늘의 알림장</div>
+      <div class="gp-grid" id="gp-today"></div>
+      <div class="gp-cat">이번주 알림장</div>
+      <div class="gp-grid" id="gp-week"></div>
+      <div class="gp-cat">시즌별 알림장</div>
+      <div class="gp-grid" id="gp-season"></div>
+    </div>
+  </section>
+
+  <script>
+  // ---------- Data ----------
+  const DATA = {
+    today: [
+      "보람찬 하루 완료하기!","승자의 줘팸터 5회 참여하기!","배틀잼 수령하기!","단기 속성반 2회 참여하기!","클론 팩토리 3회 참여하기!","광고보고 카드 2회 뽑기!","일일 무료 패키지 구매하기!","광고보고 왕사탕 받기!","광고보고 별사탕 받기!","광고보고 장비의 정석 받기!","친구에게 리프 보내기!","친구 방 청소해주기!","세계수 성물 받기!","연회장 음식 대접하기!","모험회 스케줄 5회 보내기!","생산랩에서 생산하기!","교단 펫 선물 수령하기!",
+    ],
+    week: ["보람찬 한주 완료하기!","상점 주간 상품 확인하기!","캐시상점 주간 상품 확인하기!"],
+    season: ["엘리아스 프론티어 참여하기!","차원 대충돌 참여하기!","세계수 굴착기지 참여하기!","승자의 줘팸터 참여하기!"],
+  };
+
+  // ---------- State (localStorage) ----------
+  const LS = { pick:'TR_pick_v1', done:'TR_done_v1', seasonAnchor:'TR_season_anchor_v1' };
+  const THREE_DAYS = 3*24*60*60*1000;
+  const defPick = () => ({
+    today: Object.fromEntries(DATA.today.map((_,i)=>[i,true])),
+    week: Object.fromEntries(DATA.week.map((_,i)=>[i,true])),
+    season: Object.fromEntries(DATA.season.map((_,i)=>[i,true])),
+  });
+  const defDone = () => ({ today:{}, week:{}, season:{} });
+  const load = (k, fb) => { try{ return JSON.parse(localStorage.getItem(k)) ?? fb(); }catch{ return fb(); } };
+  const save = (k,v) => localStorage.setItem(k, JSON.stringify(v));
+  let pick = load(LS.pick, defPick);
+  let done = load(LS.done, defDone);
+  let seasonAnchor = Number(localStorage.getItem(LS.seasonAnchor));
+  if(!seasonAnchor || Number.isNaN(seasonAnchor)){
+    seasonAnchor = Date.now() + THREE_DAYS; // 최초 진입 시 3일 후로 설정
+    localStorage.setItem(LS.seasonAnchor, String(seasonAnchor));
+  }
+
+  // ---------- Elements ----------
+  const todayList = document.getElementById('todayList');
+  const weekList  = document.getElementById('weekList');
+  const seasonList= document.getElementById('seasonList');
+  const emptyMsg  = document.getElementById('emptyMsg');
+  const backdrop  = document.getElementById('backdrop');
+
+  // season countdown node refs
+  const seasonNodes = {};
+
+  // ---------- Renderers (알림장 탭) ----------
+  function makeRow(cat, idx, label){
+    const row = document.createElement('div');
+    row.className = 'row' + (done[cat][idx] ? ' done' : '');
+
+    // 왼쪽 영역(체크박스 + 텍스트 + 서브라인)
+    const left = document.createElement('div');
+    left.className = 'col';
+
+    const cb = document.createElement('input'); cb.type='checkbox'; cb.checked=!!done[cat][idx]; cb.disabled = true; // 알림장 화면에선 체크 불가
+    const text = document.createElement('label'); text.textContent = label;
+
+    left.append(cb, text);
+
+    // 시즌별: 남은 시간 서브라인
+    if(cat==='season'){
+      const sub = document.createElement('div');
+      sub.className = 'tiny subline';
+      sub.dataset.idx = String(idx);
+      seasonNodes[idx] = sub;
+      left.appendChild(sub);
+    }
+
+    const btn  = document.createElement('button'); btn.className='go'; btn.textContent='바로가기!'; btn.addEventListener('click',()=>alert('더미 링크'));
+
+    row.append(left, btn);
+    return row;
+  }
+  function renderCategory(container, cat, arr){
+    container.innerHTML='';
+    const visible = arr.map((t,i)=> pick[cat][i] ? makeRow(cat,i,t) : null).filter(Boolean);
+    visible.forEach(el=>container.appendChild(el));
+  }
+  function renderAll(){
+    renderCategory(todayList,'today',DATA.today);
+    renderCategory(weekList,'week',DATA.week);
+    renderCategory(seasonList,'season',DATA.season);
+    const anyVisible = [...DATA.today.keys()].some(i=>pick.today[i]) || [...DATA.week.keys()].some(i=>pick.week[i]) || [...DATA.season.keys()].some(i=>pick.season[i]);
+    emptyMsg.style.display = anyVisible ? 'none' : 'block';
+    updateSeasonLines();
+  }
+
+  // ---------- Settings ----------
+  const drawer = document.getElementById('drawer');
+  const gearBtn = document.getElementById('gearBtn');
+  function toggleSettings(force){
+    const willOpen = force !== undefined ? force : !drawer.classList.contains('open');
+    drawer.classList.toggle('open', willOpen);
+    backdrop.classList.toggle('show', willOpen);
+  }
+  if(gearBtn){ gearBtn.addEventListener('click',()=> toggleSettings()); }
+  backdrop.addEventListener('click', ()=> toggleSettings(false));
+  document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') toggleSettings(false); });
+
+  function makeOpt(cat, idx, label){
+    const row=document.createElement('div'); row.className='opt';
+    const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=!!pick[cat][idx];
+    cb.addEventListener('change',()=>{ pick[cat][idx]=cb.checked; save(LS.pick,pick); renderAll(); renderGameplay(); });
+    const lb=document.createElement('label'); lb.textContent=label; row.append(cb,lb); return row;
+  }
+  function renderSettings(){
+    const st=document.getElementById('set-today'); st.innerHTML=''; DATA.today.forEach((t,i)=> st.appendChild(makeOpt('today',i,t)));
+    const sw=document.getElementById('set-week');  sw.innerHTML=''; DATA.week.forEach((t,i)=> sw.appendChild(makeOpt('week',i,t)));
+    const ss=document.getElementById('set-season'); ss.innerHTML=''; DATA.season.forEach((t,i)=> ss.appendChild(makeOpt('season',i,t)));
+  }
+
+  // ---------- Gameplay (체크만) ----------
+  function gpRow(cat, idx, label){
+    const d=document.createElement('div'); d.className='opt';
+    const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=!!done[cat][idx];
+    cb.addEventListener('change',()=>{ done[cat][idx]=cb.checked; save(LS.done,done); renderAll(); });
+    const lb=document.createElement('label'); lb.textContent=label; d.append(cb,lb); return d;
+  }
+  function renderGameplay(){
+    const gt=document.getElementById('gp-today'); gt.innerHTML=''; DATA.today.forEach((t,i)=> gt.appendChild(gpRow('today',i,t)));
+    const gw=document.getElementById('gp-week');  gw.innerHTML=''; DATA.week.forEach((t,i)=> gw.appendChild(gpRow('week',i,t)));
+    const gs=document.getElementById('gp-season'); gs.innerHTML=''; DATA.season.forEach((t,i)=> gs.appendChild(gpRow('season',i,t)));
+  }
+
+  // ---------- Tabs: 알림장/게임플레이 전환 ----------
+  document.querySelectorAll('.tab-btn').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      const tab = btn.dataset.tab;
+      if(tab==='tab-play'){
+        document.body.classList.add('play');
+        document.getElementById('tab-play').classList.add('active');
+        toggleSettings(false); // 플레이 탭으로 갈 때 설정 닫기
+      }else{
+        document.body.classList.remove('play');
+        document.getElementById('tab-play').classList.remove('active');
+      }
+    });
+  });
+
+  // ---------- Sidebar jump ----------
+  document.querySelectorAll('.sb-card').forEach(card=>{
+    card.addEventListener('click',()=>{
+      const id=card.getAttribute('data-target'); const el=document.getElementById(id);
+      if(el) el.scrollIntoView({behavior:'smooth', block:'start'});
+    })
+  })
+
+  // ---------- Timers (일/주 + 시즌) ----------
+  function fmtHM(ms){ const h=Math.floor(ms/3.6e6), m=Math.floor((ms%3.6e6)/6e4); return `${String(h).padStart(2,'0')}시간 ${String(m).padStart(2,'0')}분`; }
+  function fmtDH(ms){ const d=Math.floor(ms/8.64e7), h=Math.floor((ms%8.64e7)/3.6e6); return `${String(d).padStart(2,'0')}일 ${String(h).padStart(2,'0')}시간`; }
+
+  function updateDayWeek(){
+    const now=new Date();
+    const eod=new Date(); eod.setHours(23,59,59,999);
+    const eow=new Date(); const day=eow.getDay(); const diff=(7-day)%7; eow.setDate(eow.getDate()+diff); eow.setHours(23,59,59,999);
+    const t1=eod-now, t2=eow-now; document.getElementById('todayLeft').textContent=fmtHM(t1>0?t1:0)+" 남았다!"; document.getElementById('weekLeft').textContent=fmtDH(t2>0?t2:0)+" 남았다!";
+  }
+
+  function updateSeasonAnchor(){
+    const now=Date.now();
+    if(now>=seasonAnchor){
+      seasonAnchor = now + THREE_DAYS; // 다음 3일 주기
+      localStorage.setItem(LS.seasonAnchor, String(seasonAnchor));
+    }
+  }
+  function updateSeasonLines(){
+    updateSeasonAnchor();
+    const now=Date.now();
+    const remain = Math.max(0, seasonAnchor - now);
+    const text = `${fmtDH(remain)} 남았다!`;
+    Object.values(seasonNodes).forEach(node=> node.textContent = text);
+  }
+
+  function tick(){ updateDayWeek(); updateSeasonLines(); }
+  setInterval(tick, 1000); tick();
+
+  // ---------- Init ----------
+  renderAll(); renderSettings(); renderGameplay();
+  </script>
+</body>
+</html>
